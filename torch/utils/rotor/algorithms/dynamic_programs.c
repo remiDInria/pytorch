@@ -1,6 +1,5 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
-
 /* Dynamic Programming algorithm which computes the fastest possible
    rematerialization sequence for a given network and memory limit */
 
