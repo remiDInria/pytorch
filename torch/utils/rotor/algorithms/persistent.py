@@ -1,4 +1,5 @@
 #import dynamic_programs as dp
+<<<<<<< HEAD
 import os
 from torch.utils.cpp_extension import load
 from . import sequence as sq
@@ -7,6 +8,11 @@ os.environ["CXX"]="cc"
 module_path = os.path.dirname(__file__)
 
 dp = load(name="dynamic_programs", sources=[os.path.join(module_path,"dynamic_programs.c")],verbose=True)
+=======
+from torch.utils.cpp_extension import load
+from . import sequence as sq
+dp = load(name="dynamic_programs", sources=["dynamic_programs"])
+>>>>>>> daf4f478ca6df139ffbc438d3e5a379eab1629aa
 
 
 # Builds the optimal sequence, recursive helper function
