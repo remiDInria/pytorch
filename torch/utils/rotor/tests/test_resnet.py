@@ -1,6 +1,6 @@
 
 import torch.nn as nn
-from rotor import rotor
+torch.utils.rotor import rotor
 import torch
 
 

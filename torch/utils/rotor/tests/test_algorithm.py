@@ -1,6 +1,6 @@
 import pytest
 import rotor
-from rotor.algorithms.sequence import *
+torch.utils.rotor.algorithms.sequence import *
 from ..inspection import Chain
 
 def test_homogeneous_chain():

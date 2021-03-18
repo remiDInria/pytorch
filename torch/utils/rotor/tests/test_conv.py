@@ -1,5 +1,5 @@
 import torch
-from rotor import rotor
+from torch.utils.rotor import rotor
 import os.path
 
 def test_backward():
