@@ -1024,6 +1024,7 @@ if __name__ == '__main__':
                 'utils/benchmark/utils/*.cpp',
                 'utils/benchmark/utils/valgrind_wrapper/*.cpp',
                 'utils/benchmark/utils/valgrind_wrapper/*.h',
+                'utils/rotor/algorithms/*.c',
             ],
             'caffe2': [
                 'python/serialized_test/data/operator_test/*.zip',

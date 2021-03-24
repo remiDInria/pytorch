@@ -1,6 +1,8 @@
 import warnings
 import torch
 
+__all__ = ["RngState"]
+
 def tensor_mem_size(tensors):
     """
     Recursively sum the memory sizes of the torch.tensor contained in tensors.
@@ -104,14 +106,6 @@ def get_gradients(inputs):
     else:
         return tuple(inp.grad if isinstance(inp, torch.Tensor) else inp
                      for inp in inputs)
-
-
-class EmptyManager:
-    def __enter__(self):
-        pass
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        return False
 
 
 class RngState:

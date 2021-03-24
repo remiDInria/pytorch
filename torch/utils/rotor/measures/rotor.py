@@ -1,11 +1,12 @@
 import sys
 import torch
 
-from . import algorithms as alg
-from .algorithms import sequence as sq
-from . import inspection
-from . import memory
-from . import utils
+from torch.utils.rotor import measures
+from torch.utils.rotor import algorithms as alg
+from torch.utils.rotor.algorithms import sequence as sq
+
+__all__ = ["TensorStorage", "CheckpointOptim", "Checkpointable"]
+
 
 
 class TensorStorage:
@@ -77,7 +78,7 @@ class TensorStorage:
         def save(tensors):
             if tensors is None:
                 return None
-            tensors = utils.ensure_tuple(tensors)
+            tensors = measures.utils.ensure_tuple(tensors)
             start_index = len(self.result)
             self.result = self.result + tensors
             end_index = len(self.result)
@@ -135,7 +136,7 @@ class CheckpointOptim(torch.autograd.Function):
         :return:
         :rtype: torch.Tensor or tuple
         """
-        utils.check_backward_validity(arg)
+        measures.utils.check_backward_validity(arg)
         current_input = arg
         ctx.run_function = functions
         ctx.names = names
@@ -152,7 +153,7 @@ class CheckpointOptim(torch.autograd.Function):
                 # A theorem says: ForwardEnable operations are never done twice. So there is no
                 # need to save the RNG state here.
                 storage.store_value(op.index, current_input, source_of_current)
-                current_input = utils.detach_variable(current_input, force_required_grad=True)
+                current_input = measures.utils.detach_variable(current_input, force_required_grad=True)
                 source_of_current = current_input
                 with torch.enable_grad():
                     current_input = functions[op.index](current_input)
@@ -160,7 +161,7 @@ class CheckpointOptim(torch.autograd.Function):
             elif isinstance(op, sq.Forward):  # covers both ForwardNograd and ForwardCheck
                 if type(op) is sq.ForwardCheck:
                     storage.store_value(op.index, current_input, source_of_current,
-                                        utils.RngState(current_input) if preserve_rng_state else None)
+                                        measures.utils.RngState(current_input) if preserve_rng_state else None)
                 with torch.no_grad():
                     current_input = functions[op.index](current_input)
                 source_of_current = None
@@ -181,7 +182,7 @@ class CheckpointOptim(torch.autograd.Function):
         ctx.save_for_backward(*storage.serialize())
         ctx.storage = storage
         if loss_operation_index > 0:
-            return utils.detach_variable(current_input)
+            return measures.utils.detach_variable(current_input)
         else:
             return current_input
 
@@ -204,7 +205,7 @@ class CheckpointOptim(torch.autograd.Function):
                 state = storage.get_rng(op.index)
                 source = None
                 if type(op) is sq.ForwardEnable:
-                    current_input = utils.detach_variable(current_input, True)
+                    current_input = measures.utils.detach_variable(current_input, True)
                     source = current_input
                     if state:
                         storage.rngStorage[op.index] = None  # no longer needed, we will not do this forward again
@@ -212,7 +213,7 @@ class CheckpointOptim(torch.autograd.Function):
                 if state:
                     state.restore()
                 elif type(op) is sq.ForwardCheck and preserve_rng_state:
-                    state = utils.RngState(current_input)
+                    state = measures.utils.RngState(current_input)
                     storage.rngStorage[op.index] = state
                 with torch.set_grad_enabled(type(op) is sq.ForwardEnable):
                     current_input = functions[op.index](current_input)
@@ -228,7 +229,7 @@ class CheckpointOptim(torch.autograd.Function):
             elif type(op) is sq.Backward:
                 src_index = op.index + 1
                 torch.autograd.backward(storage.get_value(src_index), grad_tensors=args)
-                args = utils.get_gradients(storage.get_source(src_index))
+                args = measures.utils.get_gradients(storage.get_source(src_index))
                 assert args is not None
                 storage.delete_index(src_index)
 
@@ -315,7 +316,7 @@ class Checkpointable(torch.nn.Module):
         """
         super(Checkpointable, self).__init__()
         self.model = model
-        self.modules_and_names = utils.extract_children_from_sequential(model)
+        self.modules_and_names = measures.utils.extract_children_from_sequential(model)
         self.names, self.functions = (list(vals) for vals in zip(*self.modules_and_names))
         self.verbosity = verbosity
         self.mem_slots = mem_slots
@@ -339,7 +340,7 @@ class Checkpointable(torch.nn.Module):
         :param custom_input: input data.
         :type custom_input: torch.nn.Tensor
         """
-        self.all_values = inspection.measure_everything(self.modules_and_names, custom_input)
+        self.all_values = measures.inspection.measure_everything(self.modules_and_names, custom_input)
         self.sequence = None
 
     def build_chain(self, mem_limit):
@@ -358,12 +359,12 @@ class Checkpointable(torch.nn.Module):
             mem_unit = mem_limit // self.mem_slots
         else:
             mem_unit = 1
-        self.chain = inspection.Chain(self.all_values, mem_unit,
+        self.chain = measures.inspection.Chain(self.all_values, mem_unit,
                                       loss_tmp_memory_usage = self.loss_tmp_memory_usage)
         if self.verbosity > 1:
             print('Opt Checkpoint: length = {}, memory = {}, unit = {}, slots = {}, sum xb = {}'
-                  ''.format(len(self.functions), memory.MemSize(mem_limit),
-                            memory.MemSize(mem_unit), self.mem_slots, sum(self.chain.forward_memory_sizes)),
+                  ''.format(len(self.functions), measures.memory.MemSize(mem_limit),
+                            measures.memory.MemSize(mem_unit), self.mem_slots, sum(self.chain.forward_memory_sizes)),
                   file=sys.stderr)
 
     def compute_sequence(self, custom_mem_limit=None, mem_slots=None):
@@ -381,7 +382,7 @@ class Checkpointable(torch.nn.Module):
         # Gets the device of the first tensor of the model.
         device = next(self.model.parameters()).device
         if custom_mem_limit is None:
-            custom_mem_limit = int(memory.MeasureMemory(device).available() * available_device_memory_ratio)
+            custom_mem_limit = int(measures.memory.MeasureMemory(device).available() * available_device_memory_ratio)
         if mem_slots:
             self.mem_slots = mem_slots
         self.build_chain(custom_mem_limit)

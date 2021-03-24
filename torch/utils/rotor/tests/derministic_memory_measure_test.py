@@ -1,5 +1,5 @@
 import torch
-torch.utils.rotor import rotor
+from torch.utils.rotor import rotor
 import os.path
 
 

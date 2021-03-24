@@ -1,5 +1,5 @@
 import torch
-torch.utils.rotor import rotor
+from torch.utils.rotor import rotor
 
 r""" Test tuples as input to rotor module instead of tensor.
 """

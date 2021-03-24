@@ -1,6 +1,6 @@
 import pytest
 import torch
-import rotor
+from torch.utils.rotor import rotor
 
 
 def test_get_expected_memory_False():

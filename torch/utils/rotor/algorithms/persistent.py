@@ -1,18 +1,23 @@
-#import dynamic_programs as dp
-<<<<<<< HEAD
 import os
 from torch.utils.cpp_extension import load
-from . import sequence as sq
+from torch.utils.rotor.algorithms import sequence as sq
 
-os.environ["CXX"]="cc"
+
+is_os_cxx_preset = False
+if 'CXX' in os.environ:
+    is_os_cxx_preset = True
+    original_default_compiler = os.environ["CXX"]
+
+# use default c compiler
+os.environ["CXX"] = "cc"
 module_path = os.path.dirname(__file__)
+dp = load(name="dynamic_programs", sources=[os.path.join(module_path, "dynamic_programs.c")], verbose=True)
 
-dp = load(name="dynamic_programs", sources=[os.path.join(module_path,"dynamic_programs.c")],verbose=True)
-=======
-from torch.utils.cpp_extension import load
-from . import sequence as sq
-dp = load(name="dynamic_programs", sources=["dynamic_programs"])
->>>>>>> daf4f478ca6df139ffbc438d3e5a379eab1629aa
+if is_os_cxx_preset:
+    os.environ["CXX"] = original_default_compiler
+else:
+    del os.environ["CXX"]
+
 
 
 # Builds the optimal sequence, recursive helper function
@@ -39,7 +44,8 @@ def persistent_rec(chain, lmin, lmax, cmem, opt_table):
 
     if what[cmem][lmin][lmax][0]:
         sequence.insert(sq.ForwardEnable(lmin))
-        sequence.insert_sequence(persistent_rec(chain, lmin + 1, lmax, cmem - chain.activation_total_usages[lmin + 1], opt_table))
+        sequence.insert_sequence(persistent_rec(chain, lmin + 1, lmax, cmem - chain.activation_total_usages[lmin + 1]
+                                                , opt_table))
         sequence.insert(sq.Backward(lmin))
     else:
         j = what[cmem][lmin][lmax][1]

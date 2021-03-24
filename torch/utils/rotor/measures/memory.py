@@ -1,12 +1,11 @@
 import os
-
 import psutil
 import torch
-
 import subprocess
-from . import inspection
-from . import timing
+from torch.utils.rotor import inspection
+from torch.utils.rotor import timing
 
+__all__ = ["MemSize", "MeasureMemory", "DisplayMemory"]
 
 def sizeof_fmt(num, suffix='B'):
     for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:

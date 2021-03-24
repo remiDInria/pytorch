@@ -1,5 +1,3 @@
-__all__ = ["persistent", "sequence"]
-
-from. import sequence
-from .persistent import persistent
+from .persistent import *
+from .sequence import *
 

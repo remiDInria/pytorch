@@ -1,6 +1,7 @@
-
 # Representation of the optimal sequences computed by
 # the optimal rotor algorithm.
+
+__all__ = ["Forward", "ForwardEnable", "ForwardCheck", "ForwardNograd", "Backward", "Loss", "Function", "Sequence"]
 
 # All possible types of operations in a sequence
 class _Operation:

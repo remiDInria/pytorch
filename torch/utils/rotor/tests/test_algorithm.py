@@ -1,7 +1,8 @@
 import pytest
-import rotor
-torch.utils.rotor.algorithms.sequence import *
-from ..inspection import Chain
+import torch.utils.rotor as rotor
+#from torch.utils.rotor import rotor
+from torch.utils.rotor.algorithms.sequence import *
+from torch.utils.rotor.measures.inspection import Chain
 
 def test_homogeneous_chain():
     fwd = [1 for _ in range(10)]
