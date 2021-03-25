@@ -400,9 +400,9 @@ class Checkpointable(torch.nn.Module):
         """
         # training is defined in superclass
         if self.training:
-            if self.all_values is None:
-                self.measure(inputs)
             if self.sequence is None:
+                if self.all_values is None:
+                    self.measure(inputs)
                 self.compute_sequence(self.mem_limit)
 
             stripped_sequence, start_of_suffix = self.sequence.without_suffix()

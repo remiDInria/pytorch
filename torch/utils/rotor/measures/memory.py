@@ -2,8 +2,8 @@ import os
 import psutil
 import torch
 import subprocess
-from torch.utils.rotor import inspection
 from torch.utils.rotor import timing
+from torch.utils.rotor.measures import utils
 
 __all__ = ["MemSize", "MeasureMemory", "DisplayMemory"]
 
@@ -91,12 +91,12 @@ class MeasureMemory:
             gpu_device_index = torch.cuda.current_device()
         # TODO:REMI precisions
         # trous à réallouer (mémoire possiblement dispo)
-        return gpu_free_memories_mb[gpu_device_index] * 1024 * 1024 + torch.cuda.memory_cached(self.device) - torch.cuda.memory_allocated(self.device)
+        return gpu_free_memories_mb[gpu_device_index] * 1024 * 1024 + torch.cuda.memory_reserved(self.device) - torch.cuda.memory_allocated(self.device)
 
     ## Requires Pytorch >= 1.1.0
     def reset_max_memory(self):
         if self.cuda:
-            torch.cuda.reset_max_memory_allocated(self.device)
+            torch.cuda.reset_peak_memory_stats(self.device)
         else:
             self.current_value()
 
@@ -127,7 +127,7 @@ class MeasureMemory:
         if not self.cuda:
             return 0
         else:
-            return MemSize(torch.cuda.memory_cached(self.device))
+            return MemSize(torch.cuda.memory_reserved(self.device))
 
     def measure(self, func, *args):
         """
@@ -184,7 +184,7 @@ class DisplayMemory:
     def inspectModule(self, module):
         self.progress = timing.ProgressTimer(timing.make_timer(self.device), self._printCurrentState)
         maxLength = 0
-        for (name, m) in inspection.extract_children_from_sequential(module):
+        for (name, m) in utils.extract_children_from_sequential(module):
             maxLength = max(maxLength, len(name))
             m.register_forward_hook(lambda x, y, z, n = name: self.progress.endFwd(n))
             m.register_forward_pre_hook(lambda x, y, n = name: self.progress.startFwd(n))
