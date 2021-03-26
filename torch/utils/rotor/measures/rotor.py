@@ -364,7 +364,7 @@ class Checkpointable(torch.nn.Module):
         if self.verbosity > 1:
             print('Opt Checkpoint: length = {}, memory = {}, unit = {}, slots = {}, sum xb = {}'
                   ''.format(len(self.functions), measures.memory.MemSize(mem_limit),
-                            measures.memory.MemSize(mem_unit), self.mem_slots, sum(self.chain.forward_memory_sizes)),
+                            measures.memory.MemSize(mem_unit), self.mem_slots, sum(self.chain.forward_memory_tmp_sizes)),
                   file=sys.stderr)
 
     def compute_sequence(self, custom_mem_limit=None, mem_slots=None):

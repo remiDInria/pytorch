@@ -5,6 +5,9 @@ from torch.utils.rotor.algorithms.sequence import *
 from torch.utils.rotor.measures.memory import *
 from torch.utils.rotor.measures.utils import *
 import pytest
+from torch.testing._internal.common_utils import TestCase, run_tests
+from torch.testing._internal.common_device_type import onlyCUDA, instantiate_device_type_tests
+import pdb
 
 class ResNet(nn.Sequential):
 
@@ -246,101 +249,108 @@ def strToSeq(str):
         result.insert(op)
     return result
 
-def test_resnet18_cpu():
-    do_test(device="cpu")
 
-def test_resnet18_cpu_hc():
-    sequence = strToSeq("CF_0, Fn_1, Fn_2, Fe_3, Fe_4, Fe_5, Fe_6, Fe_7, Fe_8, Fe_9, Fe_10, Fe_11, Fe_12, Fe_13, L, B_13, B_12, B_11, B_10, B_9, B_8, B_7, B_6, B_5, B_4, B_3, Fe_0, Fe_1, Fe_2, B_2, B_1, B_0")
-    do_test(device="cpu", hardcoded_sequence=sequence)
+class TestResnet(TestCase):
 
-def test_resnet18_cuda():
-    if not torch.cuda.is_available():
-        pytest.skip("CUDA is not available")
-    do_test(device="cuda")
+    def do_test(self, depth=18, device='cuda', hardcoded_sequence=None, use_limit=True, verbosity=0):
 
-def test_resnet152_cuda():
-    if not torch.cuda.is_available():
-        pytest.skip("CUDA is not available")
-    do_test(depth=152, device="cuda")
+        device = torch.device(device)
+        if depth == 18:
+            net = resnet18()
+            limit = 560
+        else:
+            net = resnet152()
+            limit = 2048
+        net.to(device=device)
+        original_state = net.state_dict()
+        for (k, v) in original_state.items():
+            original_state[k] = v.clone()
+        shape = (32, 3, 224, 224)
 
-def test_resnet18_cpu_verbose():
-    do_test(device="cpu", verbosity=6)
+        net_check = rotor.Checkpointable(net, verbosity=verbosity)
+        if hardcoded_sequence:
+            net_check.sequence = hardcoded_sequence
+            use_limit=False
+        else:
+            sample = torch.rand(*shape, device=device)
+            net_check.measure(sample)
+            if use_limit: net_check.compute_sequence(custom_mem_limit=limit * 1024 * 1024)
+            else: net_check.compute_sequence()
+            net.load_state_dict(original_state)
 
-def test_resnet18_cuda_verbose():
-    if not torch.cuda.is_available():
-        pytest.skip("CUDA is not available")
-    do_test(device="cuda", verbosity=6)
+        if verbosity:
+            display = DisplayMemory(device)
+            display.inspectModule(net)
 
-def test_resnet18_cpu_nolimit():
-    do_test(device="cpu", use_limit=False)
-
-def test_resnet18_cuda_nolimit():
-    if not torch.cuda.is_available():
-        pytest.skip("CUDA is not available")
-    do_test(device="cuda", use_limit=False)
+        print(net_check.chain)
+        print(net_check.sequence)
 
 
-def do_test(depth=18, device='cuda', hardcoded_sequence=None, use_limit=True, verbosity=0):
-    device = torch.device(device)
-    if depth == 18:
-        net = resnet18()
-        limit = 560
-    else:
-        net = resnet152()
-        limit = 2048
-    net.to(device=device)
-    original_state = net.state_dict()
-    for (k, v) in original_state.items():
-        original_state[k] = v.clone()
-    shape = (32, 3, 224, 224)
+        measurer = MeasureMemory(device)
+        mem_usage_before = measurer.current_mem_usage()
 
-    net_check = rotor.Checkpointable(net, verbosity=verbosity)
-    if hardcoded_sequence:
-        net_check.sequence = hardcoded_sequence
-        use_limit=False
-    else:
-        sample = torch.rand(*shape, device=device)
-        net_check.measure(sample)
-        if use_limit: net_check.compute_sequence(custom_mem_limit=limit * 1024 * 1024)
-        else: net_check.compute_sequence()
+        data = torch.rand(*shape, device=device).requires_grad_()
+        #pdb.set_trace()
+        ambient_error = max(1.25 * measure_consistency(net, data), 1e-6)
+
+        measurer.reset_max_memory()
+        result = net_check(data).sum()
+        result.backward()
+        mem_usage_during = measurer.maximum_value()
+
+        if device.type == 'cuda' and use_limit:
+            print(mem_usage_during, mem_usage_before, limit)
+            assert(int(mem_usage_during)  - int(mem_usage_before) <= limit * 1024 * 1024)
+
+        data_clone = data.clone().detach().requires_grad_()
         net.load_state_dict(original_state)
+        result_clone = net(data_clone).sum()
+        result_clone.backward()
 
-    if verbosity:
-        display = rotor.memory.DisplayMemory(device)
-        display.inspectModule(net)
+        assert(torch.allclose(result, result_clone))
+        diff = torch.abs(data.grad - data_clone.grad)
+        print("Distance between grads", torch.max(diff).item())
+        assert(torch.allclose(data.grad, data_clone.grad, atol=ambient_error))
 
-    print(net_check.chain)
-    print(net_check.sequence)
+    def test_resnet18_cpu(self, device):
+        print("test_resnet18_cpu")
+        self.do_test(device=device)
 
-    measurer = MeasureMemory(device)
-    mem_usage_before = measurer.current_mem_usage()
-    data = torch.rand(*shape, device=device).requires_grad_()
+    def test_resnet18_cpu_hc(self, device):
+        print("test_resnet18_cpu_hc")
+        sequence = strToSeq("CF_0, Fn_1, Fn_2, Fe_3, Fe_4, Fe_5, Fe_6, Fe_7, Fe_8, Fe_9, Fe_10, Fe_11, Fe_12, Fe_13, L, B_13, B_12, B_11, B_10, B_9, B_8, B_7, B_6, B_5, B_4, B_3, Fe_0, Fe_1, Fe_2, B_2, B_1, B_0")
+        self.do_test(device=device, hardcoded_sequence=sequence)
 
-    ambient_error = max(1.25 * measure_consistency(net, data), 1e-6)
-    
-    measurer.reset_max_memory()
-    result = net_check(data).sum()
-    result.backward()
-    mem_usage_during = measurer.maximum_value()
+    @onlyCUDA
+    def test_resnet18_cuda(self, device):
+        self.do_test(device=device)
 
-    if device.type == 'cuda' and use_limit:
-        print(mem_usage_during, mem_usage_before, limit)
-        assert(int(mem_usage_during)  - int(mem_usage_before) <= limit * 1024 * 1024)
+    @onlyCUDA
+    def test_resnet152_cuda(self,device):
+        self.do_test(depth=152, device=device)
 
-    data_clone = data.clone().detach().requires_grad_()
-    net.load_state_dict(original_state)
-    result_clone = net(data_clone).sum()
-    result_clone.backward()
+    def test_resnet18_cpu_verbose(self, device):
+        self.do_test(device=device, verbosity=6)
 
-    assert(torch.allclose(result, result_clone))
-    diff = torch.abs(data.grad - data_clone.grad)
-    print("Distance between grads", torch.max(diff).item())
-    assert(torch.allclose(data.grad, data_clone.grad, atol=ambient_error))
+    @onlyCUDA
+    def test_resnet18_cuda_verbose(self, device):
+        self.do_test(device=device, verbosity=6)
+
+    def test_resnet18_cpu_nolimit(self, device):
+        self.do_test(device=device, use_limit=False)
+
+    @onlyCUDA
+    def test_resnet18_cuda_nolimit(self, device):
+        self.do_test(device=device, use_limit=False)
+
+
+instantiate_device_type_tests(TestResnet, globals())
 
 def measure_consistency(network, data, save_state=True):
     data = data.clone().detach().requires_grad_()
     if save_state:
         original_state = network.state_dict()
+        #pdb.set_trace()
         for (k, v) in original_state.items():
             original_state[k] = v.clone()
     data_clone = data.clone().detach().requires_grad_()
@@ -359,7 +369,11 @@ def measure_consistency(network, data, save_state=True):
     diff = torch.abs(original_grad - data_clone.grad)
     return torch.max(diff).item()
 
-if __name__ == "__main__":
-    do_test(device='cpu')
+
+if __name__ == '__main__':
+    run_tests()
+
+#if __name__ == "__main__":
+#    do_test(device='cpu')
 
 
