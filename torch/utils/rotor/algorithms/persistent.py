@@ -6,17 +6,22 @@ from torch.utils.rotor.algorithms import sequence as sq
 is_os_cxx_preset = False
 if 'CXX' in os.environ:
     is_os_cxx_preset = True
-    original_default_compiler = os.environ["CXX"]
+    original_default_compiler = os.environ['CXX']
 
 # use default c compiler
-os.environ["CXX"] = "cc"
+os.environ['CXX'] = "cc"
+
 module_path = os.path.dirname(__file__)
-dp = load(name="dynamic_programs", sources=[os.path.join(module_path, "dynamic_programs.c")], verbose=True)
+build_path = os.path.dirname(module_path)
+dp = load(name="dynamic_programs", sources=[os.path.join(module_path, "dynamic_programs.c")],
+          verbose=True,
+          build_directory=build_path,
+          extra_cflags=['-g3'])
 
 if is_os_cxx_preset:
-    os.environ["CXX"] = original_default_compiler
+    os.environ['CXX'] = original_default_compiler
 else:
-    del os.environ["CXX"]
+    del os.environ['CXX']
 
 
 
@@ -54,6 +59,7 @@ def persistent_rec(chain, lmin, lmax, cmem, opt_table):
             sequence.insert(sq.ForwardNograd(k))
         sequence.insert_sequence(persistent_rec(chain, j, lmax, cmem - chain.activation_sizes[j], opt_table))
         sequence.insert_sequence(persistent_rec(chain, lmin, j - 1, cmem, opt_table))
+
     return sequence
 
 
