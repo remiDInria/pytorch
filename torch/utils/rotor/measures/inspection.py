@@ -126,12 +126,12 @@ def measure_everything(named_modules, custom_input, min_duration_ms=30):
                 prologue()
             return func()
 
-        _, compete_func_mem_usage, complete_func_max_mem_usage = mem_measurer.measure(complete_func)
+        _, complete_func_mem_usage, complete_func_max_mem_usage = mem_measurer.measure(complete_func)
         func_duration_ms = timer.measure_median(func)
         if func_duration_ms < min_duration_ms:
             number_repetitions = 1 + int(min_duration_ms // func_duration_ms)
             func_duration_ms = timer.measure_median(func, iterations=number_repetitions)
-        return func_duration_ms, int(compete_func_mem_usage), int(complete_func_max_mem_usage)
+        return func_duration_ms, int(complete_func_mem_usage), int(complete_func_max_mem_usage)
 
     for name, module in named_modules:
         current_input_tensor = utils.detach_variable(current_input_tensor)
