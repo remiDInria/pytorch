@@ -55,9 +55,9 @@ static PyObject *
 persistent_compute_table(PyObject *self, PyObject *args)
 {
   PyObject* chain_param;
-  int mmax; 
+  long mmax;
   
-  if (!PyArg_ParseTuple(args, "Oi", &chain_param, & mmax))
+  if (!PyArg_ParseTuple(args, "Ol", &chain_param, & mmax))
     return NULL;
 
   double* fwd_dur = getDoubleArray(chain_param, "forward_durations");
@@ -100,16 +100,22 @@ persistent_compute_table(PyObject *self, PyObject *args)
      enable_grad() , or a positive value k if it is best to perform
      F_i F_{i+1} ... F_k with no_grad()
   */
-  // TODO: Can be optimized by only allocating memory for l >= i
   // TODO: float / int instead of double / long ?
-#define OPT(m, i, l) opt[(m)*(chain_length+1)*(chain_length+1) + (i) * (chain_length+1) + (l)]
-  double * opt = calloc((mmax+1) * (chain_length+1) * (chain_length+1), sizeof(double));
+  long values_i_l = chain_length * (chain_length + 1) - (chain_length*(chain_length - 1))/2 + 1;
+#define OPT(m, i, l) opt[(m)*(values_i_l) + (i) * chain_length - ((i)*((i)-1))/ 2 + (l)]
+#define WOPT(m, i, l, v) {						\
+    assert ((m <= mmax) && (m >= 0));					\
+    assert ((i <= chain_length) && (i >= 0));				\
+    assert ((l <= chain_length) && (l >= 0));				\
+    opt[(m)*(values_i_l) + (i) * chain_length - ((i)*((i)-1))/2 + (l)] = (v); \
+  }
+  double * opt = calloc((mmax+1) * values_i_l, sizeof(double));
   if(!opt) {
     return PyErr_NoMemory();
   }
 
-#define WHAT(m, i, l) what[(m)*(chain_length+1)*(chain_length+1) + (i) * (chain_length+1) + (l)]
-  long * what = calloc((mmax+1) * (chain_length+1) * (chain_length+1), sizeof(long));
+#define WHAT(m, i, l) what[(m)*(values_i_l) + (i) * chain_length - ((i)*((i)-1))/ 2 + (l)]
+  long * what = calloc((mmax+1) * values_i_l, sizeof(long));
   if(!what) {
     free(opt);
     return PyErr_NoMemory();
@@ -120,10 +126,11 @@ persistent_compute_table(PyObject *self, PyObject *args)
     long mmin = fmaxl(act_sizes[i] + act_sizes[i+1] + act_tot_usages[i+1] + bwd_tmp[i], 
 		      act_sizes[i+1] + act_tot_usages[i+1] + fwd_tmp[i]);
     mmin = fminl(mmin, mmax+1);
+    mmin = fmaxl(mmin, 0);
     for(long m = 0; m < mmin; ++m)
-      OPT(m, i, i) = INFINITY;
+      WOPT(m, i, i, INFINITY);
     for(long m = mmin; m <= mmax; ++m)
-      OPT(m, i, i) = fwd_dur[i] + bwd_dur[i];
+      WOPT(m, i, i, fwd_dur[i] + bwd_dur[i]);
   }
 
   /* Dynamic Programming: Main recursion */
@@ -137,8 +144,9 @@ persistent_compute_table(PyObject *self, PyObject *args)
 	mmin = fmaxl(mmin, act_sizes[l+1] + maxCostFWD);
       }
       mmin = fminl(mmin, mmax+1);
+      mmin = fmaxl(mmin, 0);
       for(long m = 0; m < mmin; ++m)
-	OPT(m, i, l) = INFINITY;
+	WOPT(m, i, l, INFINITY);
       for(long m = mmin; m <= mmax; ++m) {
 	long bestLeaf = -1;
 	double sumFw = 0;
@@ -156,10 +164,10 @@ persistent_compute_table(PyObject *self, PyObject *args)
 	if (m >= act_tot_usages[i+1])
 	  chainCost = OPT(m, i, i) + OPT(m - act_tot_usages[i+1], i+1, l);
 	if (bestLeafCost <= chainCost) {
-	  OPT(m, i, l) = bestLeafCost;
+	  WOPT(m, i, l, bestLeafCost);
 	  WHAT(m, i, l) = bestLeaf;
 	} else {
-	  OPT(m, i, l) = chainCost;
+	  WOPT(m, i, l, chainCost);
 	  WHAT(m, i, l) = -1;
 	}
       }
